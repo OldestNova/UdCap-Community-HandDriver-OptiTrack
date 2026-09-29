@@ -1,0 +1,53 @@
+cmake_minimum_required(VERSION 3.29)
+project(UdCapCommunityOptiTrack VERSION 0.1.0 LANGUAGES CXX)
+
+if(NOT WIN32)
+    message(FATAL_ERROR "The Motive Peripheral API plugin is Windows-only")
+endif()
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(MOTIVE_ROOT "" CACHE PATH
+    "Motive installation containing PeripheralAPI/include and PeripheralAPI/lib")
+set(UDCAP_CORE_SOURCE_DIR ""
+    CACHE PATH "Core source root containing OptiTrackWire.h")
+if(NOT MOTIVE_ROOT)
+    message(FATAL_ERROR "MOTIVE_ROOT is required; pass -DMOTIVE_ROOT=<Motive installation>")
+endif()
+if(NOT UDCAP_CORE_SOURCE_DIR)
+    message(FATAL_ERROR "UDCAP_CORE_SOURCE_DIR is required; pass -DUDCAP_CORE_SOURCE_DIR=<Core source root>")
+endif()
+if(NOT EXISTS "${MOTIVE_ROOT}/PeripheralAPI/include/PluginDevice.h" OR
+   NOT EXISTS "${MOTIVE_ROOT}/PeripheralAPI/lib/PeripheralImport.lib")
+    message(FATAL_ERROR "Motive Peripheral API not found; set MOTIVE_ROOT to the Motive installation")
+endif()
+if(NOT EXISTS "${UDCAP_CORE_SOURCE_DIR}/src/OptiTrackWire.h")
+    message(FATAL_ERROR "Core IPC protocol header not found; set UDCAP_CORE_SOURCE_DIR")
+endif()
+
+find_package(nng CONFIG REQUIRED)
+add_library(UdCapCommunityOptiTrack SHARED src/OptiTrackGlove.cpp)
+target_compile_definitions(UdCapCommunityOptiTrack PRIVATE ANALOGSYSTEM_IMPORTS)
+target_include_directories(UdCapCommunityOptiTrack PRIVATE
+    "${MOTIVE_ROOT}/PeripheralAPI/include" "${UDCAP_CORE_SOURCE_DIR}/src")
+target_link_libraries(UdCapCommunityOptiTrack PRIVATE nng::nng
+    "${MOTIVE_ROOT}/PeripheralAPI/lib/PeripheralImport.lib")
+target_compile_options(UdCapCommunityOptiTrack PRIVATE /utf-8)
+set_target_properties(UdCapCommunityOptiTrack PROPERTIES PREFIX "")
+install(TARGETS UdCapCommunityOptiTrack RUNTIME DESTINATION devices)
+install(FILES "$<TARGET_FILE:nng::nng>" DESTINATION devices)
+
+add_executable(OptiTrackWireTest tests/WireTest.cpp)
+target_include_directories(OptiTrackWireTest PRIVATE "${UDCAP_CORE_SOURCE_DIR}/src")
+target_compile_options(OptiTrackWireTest PRIVATE /UNDEBUG)
+enable_testing()
+add_test(NAME OptiTrackWireTest COMMAND OptiTrackWireTest)
+add_executable(OptiTrackIpcRoundTripTest tests/IpcRoundTripTest.cpp)
+target_include_directories(OptiTrackIpcRoundTripTest PRIVATE "${UDCAP_CORE_SOURCE_DIR}/src")
+target_link_libraries(OptiTrackIpcRoundTripTest PRIVATE nng::nng)
+target_compile_options(OptiTrackIpcRoundTripTest PRIVATE /UNDEBUG)
+add_test(NAME OptiTrackIpcRoundTripTest COMMAND OptiTrackIpcRoundTripTest)
+add_executable(OptiTrackMetadataTest tests/MetadataTest.cpp)
+target_include_directories(OptiTrackMetadataTest PRIVATE src)
+target_compile_options(OptiTrackMetadataTest PRIVATE /UNDEBUG)
+add_test(NAME OptiTrackMetadataTest COMMAND OptiTrackMetadataTest)
